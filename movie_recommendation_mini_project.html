@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOVIE BUFF - Global Database</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #141414;
+            color: #e5e5e5;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #141414; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Description Scroll */
+        .desc-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #555 transparent;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; 
+        }
+
+        /* Card Interactions */
+        .movie-card {
+            transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.3s ease;
+            background-color: #181818;
+            transform-origin: center center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .movie-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+            z-index: 20;
+        }
+
+        /* Sidebar Transition */
+        #sidebar { transition: margin-left 0.3s ease-in-out; }
+        .sidebar-hidden #sidebar { margin-left: -18rem; }
+
+        /* Utilities */
+        select, input, textarea { color-scheme: dark; }
+        .text-imdb-yellow { color: #f5c518; }
+        .bg-imdb-yellow { background-color: #f5c518; }
+
+        /* Premium OTT Icons */
+        .ott-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            font-weight: 900;
+            font-size: 10px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .ott-badge:hover {
+            transform: translateY(-2px) scale(1.1);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+            z-index: 10;
+        }
+        .ott-badge::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+
+        /* Language Badges */
+        .lang-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #333;
+            color: #ddd;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 4px;
+            text-transform: uppercase;
+            border: 1px solid #444;
+            margin-right: 4px;
+            margin-bottom: 4px;
+        }
+
+        /* Pagination */
+        .page-btn {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; font-weight: bold; background: #222;
+            transition: all 0.2s;
+        }
+        .page-btn.active { background-color: #e50914; color: white; }
+        .page-btn:hover:not(.active) { background-color: #333; }
+        .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Toast */
+        #toast {
+            visibility: hidden; min-width: 280px;
+            background-color: #222; border: 1px solid #333;
+            color: #fff; text-align: center; border-radius: 8px;
+            padding: 16px; position: fixed; z-index: 100;
+            left: 50%; bottom: 30px; transform: translateX(-50%);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0; transition: all 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden sidebar-hidden">
+
+    <!-- Navbar -->
+    <header class="bg-black/95 border-b border-white/10 h-16 flex items-center justify-between px-6 z-50 flex-shrink-0">
+        <div class="flex items-center gap-6">
+            <button id="sidebarToggle" class="text-white hover:text-gray-300 transition-colors p-2">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.reload()">
+                <div class="text-red-600 font-black text-2xl tracking-tighter shadow-red-glow">MOVIE BUFF</div>
+            </div>
+        </div>
+        
+        <!-- Smart Search -->
+        <div class="flex items-center gap-2 flex-grow max-w-xl mx-4 relative group">
+            <input type="text" id="topSearchBar" placeholder="Search 580,000+ movies..." 
+                class="w-full pl-10 pr-12 py-2.5 bg-[#1f1f1f] border border-transparent focus:border-gray-600 rounded-md outline-none text-sm text-white transition-all placeholder-gray-500">
+            <i class="fas fa-search absolute left-3 text-gray-400"></i>
+            <button id="searchBtn" class="absolute right-1 top-1 bottom-1 px-3 bg-[#333] hover:bg-white hover:text-black rounded text-xs font-bold transition-colors">
+                GO
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Sidebar - Z-index 60 to prevent overlap -->
+        <aside id="sidebar" class="w-72 bg-[#121212] border-r border-white/5 flex flex-col absolute md:static inset-y-0 left-0 z-[60] shadow-2xl flex-shrink-0">
+            <div class="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-8 flex flex-col">
+                
+                <!-- Mobile Close -->
+                <div class="md:hidden flex justify-end">
+                    <button id="closeSidebarMobile" class="text-gray-400"><i class="fas fa-times text-xl"></i></button>
+                </div>
+
+                <!-- 🍿 Snack Recommender -->
+                <div class="bg-[#1a1a1a] rounded-xl p-4 border border-white/5">
+                    <h3 class="text-sm font-bold text-yellow-500 mb-3 flex items-center gap-2">
+                        <i class="fas fa-cookie-bite"></i> Snack Bar
+                    </h3>
+                    <div id="snackDisplay" class="text-xs text-gray-400 mb-3 min-h-[40px]">
+                        Click the cookie icon on any movie card for a custom pairing!
+                    </div>
+                </div>
+
+                <!-- AI Suggestion Card (Improved Layout) -->
+                <div class="p-4 rounded-xl bg-gradient-to-br from-blue-900/30 to-purple-900/30 border border-white/10 shadow-lg relative group">
+                    <!-- Background Decor -->
+                    <div class="absolute top-0 right-0 p-2 opacity-5 pointer-events-none transform rotate-12 transition-transform group-hover:rotate-0">
+                         <i class="fas fa-robot text-6xl text-white"></i>
+                    </div>
+                    
+                    <div class="relative z-10">
+                        <h3 class="font-bold text-sm mb-1 text-blue-400 flex items-center gap-2">
+                            <i class="fas fa-magic text-yellow-400"></i> AI Suggestions
+                        </h3>
+                        <p class="text-[10px] text-gray-300 mb-3 leading-relaxed">
+                            Ask Gemini for personalized recommendations.
+                        </p>
+                        <textarea id="aiPrompt" rows="3" placeholder="e.g. 'Mind-bending thrillers like Inception'..." 
+                            class="w-full bg-black/50 text-white text-xs p-3 rounded-lg border border-white/20 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all resize-none mb-3 placeholder-gray-500 shadow-inner"></textarea>
+                        
+                        <button id="btnAiRecommend" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-blue-500/30 active:scale-95">
+                            <span>Get Recommendations</span>
+                            <i class="fas fa-sparkles"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="space-y-5">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase block mb-2">Language</label>
+                        <select id="langFilter" class="w-full bg-[#1f1f1f] text-sm p-2 rounded border border-white/10 outline-none">
+                            <option value="All">All Languages</option>
+                            <option value="English">English</option>
+                            <option value="Hindi">Hindi</option>
+                            <option value="Tamil">Tamil</option>
+                            <option value="Telugu">Telugu</option>
+                            <option value="Malayalam">Malayalam</option>
+                            <option value="Kannada">Kannada</option>
+                            <option value="Korean">Korean</option>
+                            <option value="Japanese">Japanese</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="French">French</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase block mb-2">Genre</label>
+                        <select id="genreFilter" class="w-full bg-[#1f1f1f] text-sm p-2 rounded border border-white/10 outline-none">
+                            <option value="All">All Genres</option>
+                            <option value="Action">Action</option>
+                            <option value="Comedy">Comedy</option>
+                            <option value="Drama">Drama</option>
+                            <option value="Horror">Horror</option>
+                            <option value="Romance">Romance</option>
+                            <option value="Sci-Fi">Sci-Fi</option>
+                            <option value="Thriller">Thriller</option>
+                        </select>
+                    </div>
+
+                    <!-- NEW YEAR FILTER -->
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase block mb-2">Year (1890-2025)</label>
+                        <input type="number" id="yearFilter" placeholder="e.g. 2023" min="1890" max="2025"
+                            class="w-full bg-[#1f1f1f] text-sm p-2 rounded border border-white/10 outline-none focus:border-white/30 text-white placeholder-gray-600 transition-colors">
+                    </div>
+
+                    <div>
+                         <label class="text-xs font-bold text-gray-500 uppercase block mb-1">IMDb Rating</label>
+                         <div class="flex items-center gap-2">
+                             <input type="range" id="ratingFilter" min="0" max="10" step="0.5" value="0" class="flex-grow h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500">
+                             <span id="ratingVal" class="text-yellow-500 font-bold text-xs w-6">0+</span>
+                         </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto pt-4 space-y-2">
+                    <button id="resetBtn" class="w-full py-3 text-xs font-bold text-gray-500 border border-dashed border-gray-700 rounded hover:text-white hover:border-white transition-all">
+                        Reset All Filters
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-grow flex flex-col h-full overflow-hidden relative bg-[#0e0e0e]">
+            
+            <!-- Context Header -->
+            <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-[#121212]">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <span id="headerTitle">Top Picks</span>
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-0.5" id="resultStats">Loading Library...</p>
+                </div>
+                <div class="flex items-center gap-3">
+                     <select id="sortSelect" class="bg-[#1f1f1f] text-xs font-bold text-white px-3 py-1.5 rounded border-none outline-none">
+                        <option value="rating">IMDb Rating</option>
+                        <option value="year_desc">Newest First</option>
+                        <option value="title">A-Z</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- AI Status Banner -->
+            <div id="aiLoadingBanner" class="hidden px-6 py-2 bg-blue-900/20 text-blue-300 text-xs flex items-center gap-2 justify-center">
+                <i class="fas fa-satellite-dish fa-spin"></i> Accessing Global Movie Database...
+            </div>
+
+            <!-- Grid -->
+            <div id="contentContainer" class="flex-grow overflow-y-auto custom-scrollbar p-6">
+                <!-- Use gap and min-height to ensure cards layout correctly -->
+                <div id="movieGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 gap-y-10 pb-12"></div>
+                
+                <!-- Cloud Load Button (Dynamic) -->
+                <div id="loadMoreContainer" class="hidden flex justify-center py-4">
+                    <button id="loadMoreBtn" class="px-6 py-2 bg-[#222] hover:bg-[#333] border border-white/20 rounded-full text-xs font-bold text-white transition-colors flex items-center gap-2">
+                        <i class="fas fa-cloud-download-alt"></i> Load More from Cloud
+                    </button>
+                </div>
+
+                <!-- Pagination -->
+                <div id="paginationControls" class="flex justify-center items-center gap-2 py-8 border-t border-white/5 mt-4"></div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <script>
+        // --- CONFIG & AUTH ---
+        // TODO: PASTE YOUR GEMINI API KEY BELOW BEFORE DEPLOYING
+        const apiKey = "AIzaSyDhsaxr8EcVb64n26sKxUOEQJOtJczp7tM"; 
+        let currentUtterance = null;
+
+        // --- CORE FUNCTIONS ---
+
+        function speak(text) {
+            stopSpeech();
+            if (!text) return;
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.rate = 1.1; 
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find(v => v.lang.includes('en-GB')) || voices[0];
+            if(preferred) currentUtterance.voice = preferred;
+            window.speechSynthesis.speak(currentUtterance);
+            ui.showToast('<i class="fas fa-volume-up"></i> Playing description...');
+        }
+
+        function stopSpeech() {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+        }
+
+        async function callGemini(prompt) {
+            if (!apiKey || apiKey.includes("PASTE")) {
+                ui.showToast("Error: API Key is missing!", true);
+                console.error("Please add your Gemini API key in index.html");
+                return null;
+            }
+
+            // Using gemini-2.5-flash as requested
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = { 
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" } // CRITICAL FIX
+            };
+            
+            try {
+                const response = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || `API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch (e) {
+                console.error("AI Error", e);
+                ui.showToast(`Error: ${e.message.substring(0, 30)}...`, true);
+                return null;
+            }
+        }
+
+        // --- DATASET with Trailer IDs (YouTube) and FULL Language Lists ---
+        const moviesStatic = [
+            // INDIA - Tamil
+            { id: 801, title: "Vikram", year: 2022, genres: "Action|Thriller", lang: "Tamil", all_langs: ["Tam", "Tel", "Hin", "Mal", "Kan"], rating: 8.4, poster: "https://image.tmdb.org/t/p/w500/bk9cviuyfdM9kL6c1ac8qF0J5X.jpg", desc: "A special agent investigates a murder committed by a masked group of serial killers. A high-octane action thriller.", ott: ["Disney", "Netflix"], trailer: "OKBMCL-frnk" },
+            { id: 802, title: "Kaithi", year: 2019, genres: "Action|Thriller", lang: "Tamil", all_langs: ["Tam", "Tel", "Hin"], rating: 8.5, poster: "https://image.tmdb.org/t/p/w500/15uO48F1s6wB9a2V0dF3C4.jpg", desc: "A recently released prisoner races against time to drive poisoned cops to a hospital in exchange for meeting his daughter.", ott: ["Hotstar"], trailer: "gBWBowMXh_Q" },
+            { id: 803, title: "Ponniyin Selvan: I", year: 2022, genres: "Drama|History", lang: "Tamil", all_langs: ["Tam", "Tel", "Hin", "Mal", "Kan"], rating: 7.8, poster: "https://image.tmdb.org/t/p/w500/b149db6f9b4f9b8.jpg", desc: "Vandiyathevan sets out to cross the Chola land to deliver a message from the Crown Prince Aditha Karikalan.", ott: ["Prime"], trailer: "D4qAQYlgZVM" },
+
+            // INDIA - Telugu
+            { id: 701, title: "RRR", year: 2022, genres: "Action|Drama", lang: "Telugu", all_langs: ["Tel", "Tam", "Hin", "Mal", "Kan", "Eng", "Jap"], rating: 8.0, poster: "https://image.tmdb.org/t/p/w500/nEufeZlyAOLqO2brrs0yeF1lgXO.jpg", desc: "A fictitious story about two legendary revolutionaries and their journey away from home before they started fighting for their country in the 1920s.", ott: ["Netflix", "Zee5"], trailer: "NgBoMJy386M" },
+            { id: 702, title: "Baahubali 2", year: 2017, genres: "Action|Fantasy", lang: "Telugu", all_langs: ["Tel", "Tam", "Hin", "Mal", "Kan"], rating: 8.2, poster: "https://image.tmdb.org/t/p/w500/21sC2assIm2fZRLyxpC86ny3sR4.jpg", desc: "Shiva, the son of Bahubali, learns about his heritage and begins to hunt down Bhallaladeva.", ott: ["Hotstar", "Netflix"], trailer: "qD-6d8Wo3do" },
+            { id: 703, title: "Sita Ramam", year: 2022, genres: "Romance|Drama", lang: "Telugu", all_langs: ["Tel", "Tam", "Hin", "Mal"], rating: 8.6, poster: "https://image.tmdb.org/t/p/w500/g29z2z2z2z.jpg", desc: "An orphan soldier, Lieutenant Ram's life changes, after he gets a letter from a girl named Sita.", ott: ["Prime"], trailer: "B00sF5uK31c" },
+
+            // INDIA - Hindi
+            { id: 601, title: "3 Idiots", year: 2009, genres: "Comedy|Drama", lang: "Hindi", all_langs: ["Hin", "Tam", "Tel"], rating: 8.4, poster: "https://image.tmdb.org/t/p/w500/66A9MqXOyVFCssoloscwCnTCw82.jpg", desc: "Two friends search for their long lost companion. They revisit their college days and recall the memories of their friend.", ott: ["Prime", "Netflix"], trailer: "K0eDlFX9GMc" },
+            { id: 602, title: "Dangal", year: 2016, genres: "Biography|Sport", lang: "Hindi", all_langs: ["Hin", "Tam", "Tel", "Eng"], rating: 8.3, poster: "https://image.tmdb.org/t/p/w500/yJ09fJ09fJ09fJ09fJ09fJ09f.jpg", desc: "Former wrestler Mahavir Singh Phogat and his two wrestler daughters struggle towards glory at the Commonwealth Games.", ott: ["Netflix"], trailer: "x_7YlGv9u1g" },
+            { id: 603, title: "Tumbbad", year: 2018, genres: "Horror|Fantasy", lang: "Hindi", all_langs: ["Hin", "Tam", "Tel", "Mar"], rating: 8.2, poster: "https://image.tmdb.org/t/p/w500/6666666.jpg", desc: "A mythological story about a goddess who created the entire universe. The plot revolves around the consequences when humans build a temple for her.", ott: ["Prime"], trailer: "" },
+
+            // INDIA - Kannada/Malayalam
+            { id: 501, title: "Kantara", year: 2022, genres: "Thriller|Drama", lang: "Kannada", all_langs: ["Kan", "Hin", "Tam", "Tel", "Mal"], rating: 8.3, poster: "https://image.tmdb.org/t/p/w500/5e2c5e5e5e5e5e5e5e5e5e5e5.jpg", desc: "It involves culture of Kambla and Bhootha Kola. A human and nature conflict where Shiva is a rebel who defends his village and nature.", ott: ["Prime", "Netflix"], trailer: "8m0qC_2024" },
+            { id: 502, title: "K.G.F: Chapter 2", year: 2022, genres: "Action|Crime", lang: "Kannada", all_langs: ["Kan", "Hin", "Tam", "Tel", "Mal"], rating: 8.4, poster: "https://image.tmdb.org/t/p/w500/kh4fcA3nZkJ9d2M6V5k6C9g3j2.jpg", desc: "In the blood-soaked Kolar Gold Fields, Rocky's name strikes fear into his foes. His allies look up to him, but the government sees him as a threat.", ott: ["Prime"], trailer: "Qah9sSIXJqk" },
+            { id: 503, title: "Manjummel Boys", year: 2024, genres: "Adventure", lang: "Malayalam", all_langs: ["Mal", "Tam", "Tel", "Kan", "Hin"], rating: 8.6, poster: "https://upload.wikimedia.org/wikipedia/en/9/91/Manjummel_Boys_poster.jpeg", desc: "A group of friends get into a daring rescue mission to save their friend from Guna Caves, a perilously deep pit.", ott: ["Hotstar"], trailer: "id848Ww1YLo" },
+
+            // WORLD - English/Korean/Japanese
+            { id: 101, title: "The Dark Knight", year: 2008, genres: "Action|Crime", lang: "English", all_langs: ["Eng", "Hin", "Tam", "Tel", "Spa"], rating: 9.0, poster: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg", desc: "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological tests of his ability.", ott: ["Netflix", "HBO"], trailer: "EXeTwQWrcwY" },
+            { id: 102, title: "Inception", year: 2010, genres: "Sci-Fi", lang: "English", all_langs: ["Eng", "Hin", "Tam", "Tel", "Fre"], rating: 8.8, poster: "https://image.tmdb.org/t/p/w500/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg", desc: "A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.", ott: ["Netflix"], trailer: "YoHD9XEInc0" },
+            { id: 103, title: "Parasite", year: 2019, genres: "Drama|Thriller", lang: "Korean", all_langs: ["Kor", "Eng", "Hin"], rating: 8.5, poster: "https://image.tmdb.org/t/p/w500/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg", desc: "Greed and class discrimination threaten the newly formed symbiotic relationship between the wealthy Park family and the destitute Kim clan.", ott: ["Hulu"], trailer: "5xH0HfJHsaY" },
+            { id: 104, title: "Spirited Away", year: 2001, genres: "Animation", lang: "Japanese", all_langs: ["Jap", "Eng", "Chi"], rating: 8.6, poster: "https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUKGnSxQbUgZ.jpg", desc: "During her family's move to the suburbs, a sullen 10-year-old girl wanders into a world ruled by gods, witches, and spirits, and where humans are changed into beasts.", ott: ["Netflix"], trailer: "ByXuk9QqQkk" },
+            { id: 105, title: "Godzilla Minus One", year: 2023, genres: "Action|Sci-Fi", lang: "Japanese", all_langs: ["Jap", "Eng"], rating: 8.3, poster: "https://image.tmdb.org/t/p/w500/hkxxMIGaiCTmrEArK7J56JTKUlB.jpg", desc: "Post war Japan is at its lowest point when a new crisis emerges in the form of a giant monster, baptized in the horrific power of the atomic bomb.", ott: ["Netflix"], trailer: "r7DqccP1Q_4" }
+        ];
+
+        class MovieEngine {
+            constructor() {
+                this.localData = moviesStatic;
+                this.dynamicData = [];
+            }
+
+            getAllMovies() { return [...this.dynamicData, ...this.localData]; }
+
+            // NEW: Helper to check for existing movies to prevent duplicates
+            isDuplicate(title) {
+                if (!title) return false;
+                const norm = title.toLowerCase().trim();
+                return this.getAllMovies().some(m => m.title.toLowerCase().trim() === norm);
+            }
+
+            async fetchDynamicMovie(query, isFilterBased = false) {
+                let systemInstruction = "";
+                
+                if (isFilterBased) {
+                    systemInstruction = `
+                        You are a movie database API. Fetch 8 unique ${query} movies.
+                        Output STRICT JSON ONLY. No markdown, no "json" tags.
+                        Schema: [{ "id": 123, "title": "String", "year": 2023, "genres": "Action|Drama", "lang": "English", "all_langs": ["Eng"], "rating": 8.5, "poster": null, "desc": "Short plot summary", "ott": ["Netflix"], "trailer": "" }]
+                    `;
+                } else {
+                    systemInstruction = `
+                        You are a movie database API. Search for "${query}".
+                        Output STRICT JSON ONLY. No markdown.
+                        Schema: { "id": 123, "title": "String", "year": 2023, "genres": "Genre", "lang": "English", "all_langs": ["Eng"], "rating": 8.5, "poster": null, "desc": "Short plot", "ott": ["Netflix"], "trailer": "" }
+                    `;
+                }
+
+                const jsonStr = await callGemini(systemInstruction);
+                if(jsonStr) {
+                    try {
+                        // The model now returns pure JSON due to responseMimeType
+                        const parsed = JSON.parse(jsonStr);
+                        
+                        // Robust Normalization for Frontend
+                        if (isFilterBased) {
+                            // Case A: Perfect Array
+                            if (Array.isArray(parsed)) return parsed;
+                            // Case B: Wrapped in object key (e.g. { "movies": [...] })
+                            if (typeof parsed === 'object') {
+                                const key = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+                                if (key) return parsed[key];
+                            }
+                            // Case C: Single object fallback
+                            return [parsed];
+                        } else {
+                            // Case A: Perfect Object
+                            if (!Array.isArray(parsed) && parsed.title) return parsed;
+                            // Case B: Array returned for single search
+                            if (Array.isArray(parsed)) return parsed[0];
+                            // Case C: Wrapped object
+                            const values = Object.values(parsed);
+                            const found = values.find(v => v && v.title);
+                            if (found) return found;
+                            return parsed;
+                        }
+                    } catch(e) { console.error("Parse Error", e); }
+                }
+                
+                // FALLBACK: If AI fails
+                if (!isFilterBased) {
+                    return {
+                        id: Date.now(),
+                        title: query,
+                        year: new Date().getFullYear(),
+                        genres: "Unknown",
+                        lang: "English",
+                        all_langs: ["English"],
+                        rating: "N/A",
+                        poster: null,
+                        desc: "Details could not be fetched from the cloud database.",
+                        ott: ["YouTube"],
+                        trailer: ""
+                    };
+                }
+                return null;
+            }
+
+            filter(criteria) {
+                const all = this.getAllMovies();
+                return all.filter(m => {
+                    const matchGen = criteria.genre === 'All' || m.genres.includes(criteria.genre);
+                    const matchLang = criteria.lang === 'All' || m.lang === criteria.lang;
+                    const matchRat = m.rating >= criteria.minRating;
+                    const matchSearch = !criteria.search || m.title.toLowerCase().includes(criteria.search.toLowerCase());
+                    const matchYear = !criteria.year || m.year == criteria.year;
+                    return matchGen && matchLang && matchRat && matchSearch && matchYear;
+                }).sort((a,b) => {
+                    if(criteria.sort === 'rating') return b.rating - a.rating;
+                    if(criteria.sort === 'year_desc') return b.year - a.year;
+                    if(criteria.sort === 'title') return a.title.localeCompare(b.title);
+                    return 0;
+                });
+            }
+        }
+
+        const engine = new MovieEngine();
+
+        // --- UI CONTROLLER ---
+        const ui = {
+            grid: document.getElementById('movieGrid'),
+            pagination: document.getElementById('paginationControls'),
+            stats: document.getElementById('resultStats'),
+            loadMoreBtn: document.getElementById('loadMoreContainer'),
+            
+            state: { page: 1, limit: 12, currentData: [] },
+
+            init() {
+                this.attachListeners();
+                this.render();
+            },
+
+            attachListeners() {
+                ['genreFilter', 'langFilter', 'ratingFilter', 'sortSelect', 'yearFilter'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', (e) => {
+                        if(id==='ratingFilter') document.getElementById('ratingVal').innerText = e.target.value + '+';
+                        this.state.page = 1;
+                        this.render();
+                    });
+                });
+
+                document.getElementById('searchBtn').addEventListener('click', () => this.handleSearch());
+                document.getElementById('topSearchBar').addEventListener('keydown', (e) => {
+                    if(e.key === 'Enter') this.handleSearch();
+                });
+
+                document.getElementById('btnAiRecommend').addEventListener('click', () => this.handleAiConcierge());
+                
+                // Cloud Load for Filters
+                document.getElementById('loadMoreBtn').addEventListener('click', () => this.handleCloudLoad());
+
+                // Reset Button
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    document.getElementById('genreFilter').value = 'All';
+                    document.getElementById('langFilter').value = 'All';
+                    document.getElementById('ratingFilter').value = 0;
+                    document.getElementById('ratingVal').innerText = "0+";
+                    document.getElementById('yearFilter').value = '';
+                    document.getElementById('topSearchBar').value = '';
+                    document.getElementById('sortSelect').value = 'rating';
+                    document.getElementById('aiPrompt').value = '';
+                    
+                    // Reset to page 1 and re-render
+                    this.state.page = 1;
+                    this.render();
+                    ui.showToast('Filters reset!');
+                });
+
+                const toggle = () => document.body.classList.toggle('sidebar-hidden');
+                document.getElementById('sidebarToggle').addEventListener('click', toggle);
+                document.getElementById('closeSidebarMobile').addEventListener('click', toggle);
+
+                document.addEventListener('visibilitychange', () => { if(document.hidden) stopSpeech(); });
+            },
+
+            recommendSnackForMovie(genre, title) {
+                const snacks = {
+                    'Action': '🍿 Butter Popcorn & Coke',
+                    'Horror': '🍕 Pizza & Comfort Food',
+                    'Romance': '🍫 Chocolate & Ice Cream',
+                    'Drama': '🍷 Wine & Cheese / Tea',
+                    'Sci-Fi': '🍬 Sour Patch Kids & Energy Drink',
+                    'Adventure': '🥨 Pretzels & Juice',
+                    'Comedy': '🌭 Hot Dog & Soda',
+                    'All': '🌮 Nachos with Extra Cheese'
+                };
+                const mainGenre = genre.split('|')[0] || 'All';
+                const snack = snacks[mainGenre] || snacks['All'];
+                
+                ui.showToast(`<div class="flex flex-col"><span class="font-bold text-yellow-500 mb-1">Snack for ${title}</span><span>${snack}</span></div>`);
+            },
+
+            recommendSnack() {
+                const genres = document.getElementById('genreFilter').value;
+                const snack = genres === 'All' ? '🌮 Nachos & Cheese' : '🍿 Popcorn & Soda';
+                document.getElementById('snackDisplay').innerHTML = `<span class="text-yellow-500 font-bold">Recommended:</span><br/>${snack}`;
+            },
+
+            async handleSearch() {
+                const query = document.getElementById('topSearchBar').value.trim();
+                if(!query) return this.render();
+                
+                this.state.page = 1;
+                const localResults = engine.filter(this.getCriteria());
+                
+                // If found locally, show them.
+                if (localResults.length > 0) {
+                    this.state.currentData = localResults;
+                    this.renderGrid();
+                } else {
+                    // Try Fetch
+                    document.getElementById('aiLoadingBanner').classList.remove('hidden');
+                    ui.showToast('Searching global database...');
+                    const result = await engine.fetchDynamicMovie(query);
+                    document.getElementById('aiLoadingBanner').classList.add('hidden');
+                    if(result) {
+                        const movie = Array.isArray(result) ? result[0] : result;
+                        
+                        // FIX: Strict check against ALL existing movies (local + cloud)
+                        if(!engine.isDuplicate(movie.title)) {
+                            engine.dynamicData.push(movie);
+                            this.render();
+                            ui.showToast(`Found "${movie.title}"!`);
+                        } else {
+                            ui.showToast(`"${movie.title}" is already in your list!`);
+                            // Re-render anyway to ensure it shows up if it was hidden by filters
+                            this.render(); 
+                        }
+                    } else {
+                        ui.showToast("Movie not found in global database.", true);
+                    }
+                }
+            },
+
+            async handleCloudLoad() {
+                const criteria = this.getCriteria();
+                let query = "";
+                // Smart Randomizer for Infinite Scroll Simulation
+                const randomGenres = ["Action", "Comedy", "Drama", "Sci-Fi", "Horror", "Thriller", "Romance", "Adventure", "Fantasy", "Crime"];
+                const randomLangs = ["English", "Hindi", "Tamil", "Korean", "Japanese", "Spanish", "French", "Telugu"];
+                
+                let effectiveGenre = criteria.genre;
+                if(criteria.genre === "All") {
+                    effectiveGenre = randomGenres[Math.floor(Math.random() * randomGenres.length)];
+                }
+                
+                let effectiveLang = criteria.lang;
+                if(criteria.lang === "All") {
+                    effectiveLang = randomLangs[Math.floor(Math.random() * randomLangs.length)];
+                }
+
+                query = `${effectiveGenre} movies in ${effectiveLang}`;
+                if(criteria.year) query += ` from ${criteria.year}`;
+
+                document.getElementById('aiLoadingBanner').classList.remove('hidden');
+                ui.showToast(`Fetching ${query}...`);
+                
+                const results = await engine.fetchDynamicMovie(query, true); 
+                document.getElementById('aiLoadingBanner').classList.add('hidden');
+
+                if(results && Array.isArray(results)) {
+                    let addedCount = 0;
+                    results.forEach(m => { 
+                        // FIX: Check duplicates for each item in the batch
+                        if (!engine.isDuplicate(m.title)) {
+                            m.id = Date.now() + Math.floor(Math.random() * 1000); 
+                            engine.dynamicData.push(m);
+                            addedCount++;
+                        }
+                    });
+
+                    if (addedCount > 0) {
+                        this.render();
+                        ui.showToast(`Added ${addedCount} new movies!`);
+                    } else {
+                        ui.showToast("No new unique movies found.");
+                    }
+                } else {
+                    ui.showToast("Could not fetch more movies. Try again.", true);
+                }
+            },
+
+            async handleAiConcierge() {
+                const prompt = document.getElementById('aiPrompt').value;
+                if(!prompt) return;
+                ui.showToast("Consulting AI Assistant...");
+                const result = await engine.fetchDynamicMovie(prompt + " movie recommendation");
+                if(result) {
+                    const movie = Array.isArray(result) ? result[0] : result;
+                    
+                    // FIX: Check duplicates
+                    if (!engine.isDuplicate(movie.title)) {
+                        engine.dynamicData.unshift(movie);
+                        this.render();
+                        ui.showToast("Recommendation added!");
+                    } else {
+                        ui.showToast("That movie is already in your library!");
+                    }
+                }
+            },
+
+            getCriteria() {
+                return {
+                    genre: document.getElementById('genreFilter').value,
+                    lang: document.getElementById('langFilter').value,
+                    year: document.getElementById('yearFilter').value,
+                    minRating: parseFloat(document.getElementById('ratingFilter').value),
+                    sort: document.getElementById('sortSelect').value,
+                    search: document.getElementById('topSearchBar').value
+                };
+            },
+
+            render() {
+                const criteria = this.getCriteria();
+                this.state.currentData = engine.filter(criteria);
+                this.stats.innerText = `${this.state.currentData.length} Movies`;
+                
+                if(criteria.genre !== "All" || criteria.lang !== "All" || criteria.year) {
+                    this.loadMoreBtn.classList.remove('hidden');
+                } else {
+                    this.loadMoreBtn.classList.add('hidden');
+                }
+
+                this.renderGrid();
+            },
+
+            renderGrid() {
+                const start = (this.state.page - 1) * this.state.limit;
+                const end = start + this.state.limit;
+                const pageData = this.state.currentData.slice(start, end);
+
+                if (pageData.length === 0) {
+                    this.grid.innerHTML = `<div class="col-span-full py-20 text-center text-gray-600"><i class="fas fa-film text-4xl mb-4"></i><p>No movies found locally. Use Search or 'Load More' to fetch from Cloud.</p></div>`;
+                    this.pagination.innerHTML = '';
+                    return;
+                }
+
+                this.grid.innerHTML = pageData.map(m => this.createCard(m)).join('');
+                this.renderPagination();
+            },
+
+            createCard(m) {
+                // UNIVERSAL CLOUD POSTER FIX: Year-Specific Query
+                const query = `${m.title} ${m.year} official movie poster vertical`;
+                const cloudPosterUrl = `https://tse4.mm.bing.net/th?q=${encodeURIComponent(query)}&w=300&h=450&c=7&rs=1&p=0`;
+                
+                let posterSrc = (m.poster && m.poster.startsWith('http')) ? m.poster : cloudPosterUrl;
+                
+                // LANGUAGES AS ICONS (Big & Clear)
+                const langBadges = (m.all_langs || [m.lang]).map(l => 
+                    `<span class="lang-badge border border-white/20 text-[9px]">${l.substring(0,3)}</span>`
+                ).join('');
+                
+                // Safe Title for JS
+                const safeTitle = m.title.replace(/'/g, "\\'");
+                
+                // YouTube Link Logic - Clean Direct Link to Search Results
+                const trailerLink = `https://www.youtube.com/results?search_query=${encodeURIComponent(m.title + " " + m.year + " official trailer")}`;
+
+                return `
+                <div class="movie-card group relative bg-[#181818] rounded-md overflow-hidden flex flex-col h-full hover:ring-2 hover:ring-white/50 transition-all duration-300">
+                    <!-- Poster Container - Netflix Style Aspect Ratio (2:3) -->
+                    <div class="relative w-full aspect-[2/3] bg-[#222]">
+                        <img src="${posterSrc}" alt="${m.title}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                             onerror="this.onerror=null; this.src='${cloudPosterUrl}'">
+                        
+                        <!-- Gradient Overlay -->
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#181818] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+                        <div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded flex items-center gap-1 z-10 border border-white/10">
+                            <span class="text-white font-bold text-xs">${m.year}</span>
+                            <i class="fas fa-star text-yellow-500 text-[10px]"></i>
+                            <span class="text-white font-bold text-xs">${m.rating || 'N/A'}</span>
+                        </div>
+                    </div>
+
+                    <!-- Content Body -->
+                    <div class="flex-1 p-3 flex flex-col border-t border-white/5">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-white leading-tight text-sm flex-grow truncate pr-2" title="${m.title}">${m.title}</h3>
+                        </div>
+                        
+                        <!-- Description with Line Clamp for uniform height -->
+                        <div class="text-xs text-gray-400 leading-relaxed mb-3 line-clamp-3 h-[4.5em]">
+                            ${m.desc}
+                        </div>
+
+                        <!-- Action Bar (Sleek Dark Buttons) -->
+                        <div class="flex justify-end gap-2 pt-2 border-t border-white/5 mb-3 mt-auto">
+                            <button onclick="event.stopPropagation(); ui.recommendSnackForMovie('${m.genres}', '${safeTitle}')" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center text-white transition-all border border-white/10" title="Get Snack">
+                                <i class="fas fa-cookie-bite text-xs text-yellow-500"></i>
+                            </button>
+                            <button onclick="event.stopPropagation(); speak('${m.desc.replace(/'/g, "")}')" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center text-white transition-all border border-white/10" title="Listen">
+                                <i class="fas fa-volume-up text-xs text-blue-400"></i>
+                            </button>
+                            <button onclick="event.stopPropagation(); stopSpeech()" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center text-white transition-all border border-white/10" title="Stop">
+                                <i class="fas fa-stop text-xs text-red-500"></i>
+                            </button>
+                        </div>
+
+                        <div>
+                            <div class="mb-2 flex flex-wrap gap-1 opacity-80">
+                                ${langBadges}
+                            </div>
+                            <div class="flex gap-2 mb-3">
+                                ${(m.ott || ['Cinema']).map(p => this.getOttIcon(p)).slice(0, 3).join('')}
+                            </div>
+                            
+                            <!-- White CTA Button like Netflix -->
+                            <a href="${trailerLink}" target="_blank" class="block w-full py-2 bg-white text-black hover:bg-gray-200 font-bold text-xs rounded text-center transition-colors shadow-lg no-underline cursor-pointer flex items-center justify-center gap-2">
+                                <i class="fas fa-play text-[10px]"></i> Watch Trailer
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                `;
+            },
+
+            // Removed openTrailer JS function as we use direct href now
+
+            getOttIcon(platform) {
+                const designs = {
+                    'Netflix': { bg: '#E50914', text: 'NETFLIX', color: 'white' },
+                    'Prime': { bg: '#00A8E1', text: 'prime', color: 'white' },
+                    'Disney': { bg: '#113CCF', text: 'Disney+', color: 'white' },
+                    'Hotstar': { bg: 'linear-gradient(135deg, #0c1c2c 0%, #1c3a55 100%)', text: 'Hotstar', color: '#00D800' },
+                    'Hulu': { bg: '#1CE783', text: 'hulu', color: 'black' },
+                    'HBO': { bg: 'linear-gradient(to right, #4c2a96, #000)', text: 'HBO', color: 'white' },
+                    'Zee5': { bg: '#FF0090', text: 'ZEE5', color: 'white' },
+                    'YouTube': { bg: '#FF0000', text: '<i class="fab fa-youtube"></i>', color: 'white' },
+                    'Apple': { bg: '#000000', text: '<i class="fab fa-apple"></i>TV+', color: 'white' },
+                    'SonyLIV': { bg: '#F66E06', text: 'LIV', color: 'white' },
+                    'Cinema': { bg: '#FFD700', text: '<i class="fas fa-ticket-alt"></i>', color: 'black' }
+                };
+
+                const p = designs[platform] || designs['Cinema'];
+                
+                return `
+                    <div class="ott-badge" style="background: ${p.bg}; color: ${p.color}" title="${platform}">
+                        ${p.text}
+                    </div>
+                `;
+            },
+
+            renderPagination() {
+                const totalPages = Math.ceil(this.state.currentData.length / this.state.limit);
+                let html = '';
+                html += `<button class="page-btn" onclick="ui.setPage(${this.state.page-1})" ${this.state.page===1?'disabled':''}><i class="fas fa-chevron-left"></i></button>`;
+                for(let i=1; i<=totalPages; i++) {
+                    if(i === 1 || i === totalPages || (i >= this.state.page-1 && i <= this.state.page+1)) {
+                        html += `<button class="page-btn ${i===this.state.page?'active':''}" onclick="ui.setPage(${i})">${i}</button>`;
+                    } else if (html.slice(-3) !== '...') {
+                        html += `<span class="text-gray-600 px-1">...</span>`;
+                    }
+                }
+                html += `<button class="page-btn" onclick="ui.setPage(${this.state.page+1})" ${this.state.page===totalPages?'disabled':''}><i class="fas fa-chevron-right"></i></button>`;
+                this.pagination.innerHTML = totalPages > 1 ? html : '';
+            },
+
+            setPage(p) {
+                const max = Math.ceil(this.state.currentData.length / this.state.limit);
+                if(p < 1 || p > max) return;
+                this.state.page = p;
+                this.renderGrid();
+                this.grid.scrollTop = 0;
+            },
+
+            showToast(msg, error=false) {
+                const t = document.getElementById('toast');
+                t.innerHTML = msg;
+                t.style.border = error ? '1px solid red' : '1px solid #333';
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3000);
+            }
+        };
+
+        window.onload = () => ui.init();
+    </script>
+</body>
+
+</html>
